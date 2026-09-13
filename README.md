@@ -1,2 +1,3 @@
 # YC-Fall-2026-x-Moss-The-Zero-Latency-Builder-Sprint
 Build production-ready AI applications inspired by YC's Fall 2026 Requests for Startups using Moss for sub-10ms semantic search without a traditional vector database.
+Pulse OS redefines voice AI for field and clinical staff by guaranteeing sub-500ms response times. Our architecture streams audio via WebSockets/WebRTC through an orchestration layer that leverages Moss for instantaneous (<10ms) context injection and Qdrant for RAG. By pipelining Deepgram, GPT-4o, and ElevenLabs in real-time, we create an AI that can be interrupted naturally and answers instantly. The expected impact is a massive reduction in administrative friction for emergency responders, doctors, and engineers, enabling 100% hands-free workflows.
