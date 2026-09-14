@@ -1,6 +1,7 @@
 # 🎙️ Zero-Latency Voice Builder Sprint (Track 1)
 
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![Moss](https://img.shields.io/badge/Moss-32CD32?style=for-the-badge&logo=leaf&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![LiveKit](https://img.shields.io/badge/LiveKit-00B272?style=for-the-badge&logo=livekit&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
