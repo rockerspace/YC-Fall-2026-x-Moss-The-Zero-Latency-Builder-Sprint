@@ -16,11 +16,12 @@ export default function Home() {
   const [url, setUrl] = useState("");
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [persona, setPersona] = useState("healthcare");
 
   const startSession = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/token");
+      const res = await fetch(`/api/token?participantName=${persona}`);
       const data = await res.json();
       if (data.error) {
         alert(data.error);
@@ -51,6 +52,20 @@ export default function Home() {
             <p className="text-sm text-gray-400 mb-4">
               Connect securely via LiveKit Cloud to start interacting with the Moss-powered agent.
             </p>
+            
+            <div className="mb-4 w-full">
+              <label className="block text-sm font-medium text-gray-400 mb-2">Select Industry Persona</label>
+              <select 
+                value={persona}
+                onChange={(e) => setPersona(e.target.value)}
+                className="w-full bg-gray-950 border border-gray-700 rounded-md px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="healthcare">Healthcare (Medical Triage)</option>
+                <option value="field_worker">Field Operations (HVAC Repair)</option>
+                <option value="dispatch">Emergency Dispatch (911)</option>
+                <option value="customer_support">Customer Support (Billing)</option>
+              </select>
+            </div>
             
             <button
               onClick={startSession}

@@ -49,7 +49,7 @@ class MossContextEngine:
         try:
             start = time.perf_counter()
             # Real database lookup replacing the asyncio.sleep mock
-            self.cursor.execute("SELECT context FROM session_context WHERE user_id = ?", (CURRENT_SCENARIO,))
+            self.cursor.execute("SELECT context FROM session_context WHERE user_id = ?", (user_id,))
             row = self.cursor.fetchone()
             scenario_context = row[0] if row else "No context available."
             
@@ -71,8 +71,14 @@ def prewarm(proc: JobProcess):
         logger.error(f"Failed to load VAD model: {e}")
 
 async def entrypoint(ctx: JobContext):
+    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+    participant = await ctx.wait_for_participant()
+    logger.info(f"Starting voice assistant for participant {participant.identity}")
+
     # 1. Base CRISPE prompt incorporating constraints for low latency
-    scenario = SCENARIOS.get(CURRENT_SCENARIO, {"role": "fallback agent"})
+    current_persona = participant.identity if participant.identity in SCENARIOS else "healthcare"
+    scenario = SCENARIOS.get(current_persona, {"role": "fallback agent"})
+    
     initial_ctx = llm.ChatContext().append(
         role="system",
         text=(
@@ -82,10 +88,6 @@ async def entrypoint(ctx: JobContext):
             "If the requested information is not in the context, clearly state that you do not have the information."
         ),
     )
-
-    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
-    participant = await ctx.wait_for_participant()
-    logger.info(f"Starting voice assistant for participant {participant.identity}")
 
     # 2. Define the Moss interception hook
     async def before_llm_cb(agent: VoicePipelineAgent, chat_ctx: llm.ChatContext):
@@ -102,7 +104,7 @@ async def entrypoint(ctx: JobContext):
             import json
             payload = json.dumps({
                 "type": "explainability_log",
-                "data": f"[{CURRENT_SCENARIO.upper()}]\nQuery: '{last_user_msg.content}'\n{context}"
+                "data": f"[{participant.identity.upper()}]\nQuery: '{last_user_msg.content}'\n{context}"
             }).encode('utf-8')
             await ctx.room.local_participant.publish_data(payload)
 
