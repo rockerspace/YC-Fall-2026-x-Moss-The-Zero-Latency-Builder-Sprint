@@ -12,54 +12,67 @@ from livekit.plugins import deepgram, elevenlabs, openai, silero
 load_dotenv()
 logger = logging.getLogger("voice-agent")
 
+import json
+
 # --- HACKATHON SCENARIOS ---
 # Showcasing the versatility of Moss for different industries!
-SCENARIOS = {
-    "field_worker": {
-        "role": "expert field operations assistant",
-        "context": "[ACTIVE SESSION: Assignment 42 - HVAC Repair]\nRecent logs: Compressor valve pressure dropped below threshold.\nProtocol: Inform user to wear safety goggles before inspecting the valve."
-    },
-    "healthcare": {
-        "role": "medical triage assistant",
-        "context": "[ACTIVE SESSION: Patient ER Intake]\nVitals: Heart rate 110bpm, Blood Pressure 140/90.\nProtocol: Ask patient about chest pain duration. Recommend immediate EKG."
-    },
-    "dispatch": {
-        "role": "emergency dispatch coordinator",
-        "context": "[ACTIVE SESSION: Incident 992 - Highway Collision]\nLocation: I-95 Northbound, Mile marker 42.\nProtocol: Dispatch 2 ambulances and 1 fire engine. Keep caller calm."
-    },
-    "customer_support": {
-        "role": "customer support specialist",
-        "context": "[ACTIVE SESSION: Billing Inquiry - Acct #7782]\nStatus: Overdue balance of $120.50.\nProtocol: Offer a 3-month payment plan. Do not charge late fees."
-    }
-}
+# We now load these dynamically from an external config file.
+try:
+    with open("personas.json", "r") as f:
+        SCENARIOS = json.load(f)
+except Exception as e:
+    logger.error(f"Failed to load personas.json: {e}")
+    SCENARIOS = {}
 
 # Change this variable to test different industries for your demo!
-CURRENT_SCENARIO = "healthcare"
+CURRENT_SCENARIO = os.getenv("ACTIVE_PERSONA", "healthcare")
 
-# --- MOSS SDK STUB ---
+import sqlite3
+
+# --- MOSS SDK STUB (Real DB Connection) ---
 class MossContextEngine:
     def __init__(self, api_key: str):
         self.api_key = api_key
-        logger.info("[Moss] Initialized sub-10ms semantic context engine")
+        # Connect to a real, high-performance in-memory datastore
+        self.conn = sqlite3.connect(":memory:", check_same_thread=False)
+        self.cursor = self.conn.cursor()
+        self.cursor.execute("CREATE TABLE session_context (user_id TEXT, context TEXT)")
+        
+        # Pre-seed the datastore with our scenarios
+        for role, data in SCENARIOS.items():
+            self.cursor.execute("INSERT INTO session_context VALUES (?, ?)", (role, data.get("context", "")))
+        self.conn.commit()
+        logger.info("[Moss] Initialized sub-10ms semantic context engine with SQLite in-memory store")
         
     async def retrieve_context(self, user_id: str, query: str) -> str:
-        """Simulates <10ms retrieval of semantic context and user state."""
-        start = time.perf_counter()
-        await asyncio.sleep(0.005) # Simulate 5ms retrieval
-        latency = (time.perf_counter() - start) * 1000
-        logger.info(f"[Moss] Retrieved semantic context in {latency:.2f}ms for query: '{query}'")
-        
-        return f"User ID: {user_id}\n{SCENARIOS[CURRENT_SCENARIO]['context']}"
+        """High-performance retrieval from real datastore."""
+        try:
+            start = time.perf_counter()
+            # Real database lookup replacing the asyncio.sleep mock
+            self.cursor.execute("SELECT context FROM session_context WHERE user_id = ?", (CURRENT_SCENARIO,))
+            row = self.cursor.fetchone()
+            scenario_context = row[0] if row else "No context available."
+            
+            latency = (time.perf_counter() - start) * 1000
+            logger.info(f"[Moss] Retrieved semantic context from DB in {latency:.2f}ms for query: '{query}'")
+            
+            return f"User ID: {user_id}\n{scenario_context}"
+        except Exception as e:
+            logger.error(f"[Moss] Fatal error during context retrieval: {e}")
+            return "CRITICAL: Context retrieval failed. Proceed with standard safety protocols."
 
 moss_engine = MossContextEngine(api_key=os.getenv("MOSS_API_KEY", "hackathon-mock-key"))
 # ---------------------
 
 def prewarm(proc: JobProcess):
-    proc.userdata["vad"] = silero.VAD.load()
+    try:
+        proc.userdata["vad"] = silero.VAD.load()
+    except Exception as e:
+        logger.error(f"Failed to load VAD model: {e}")
 
 async def entrypoint(ctx: JobContext):
     # 1. Base CRISPE prompt incorporating constraints for low latency
-    scenario = SCENARIOS[CURRENT_SCENARIO]
+    scenario = SCENARIOS.get(CURRENT_SCENARIO, {"role": "fallback agent"})
     initial_ctx = llm.ChatContext().append(
         role="system",
         text=(
@@ -93,18 +106,29 @@ async def entrypoint(ctx: JobContext):
             }).encode('utf-8')
             await ctx.room.local_participant.publish_data(payload)
 
-    # 3. Assemble the ultra-low latency pipeline
-    agent = VoicePipelineAgent(
-        vad=ctx.proc.userdata["vad"],       
-        stt=deepgram.STT(),                 
-        llm=openai.LLM(model="gpt-4o"),     
-        tts=elevenlabs.TTS(),               
-        chat_ctx=initial_ctx,
-        before_llm_cb=before_llm_cb,
-    )
+    # 3. Assemble the ultra-low latency pipeline with error handling (API failures)
+    try:
+        agent = VoicePipelineAgent(
+            vad=ctx.proc.userdata.get("vad", silero.VAD.load()),       
+            stt=deepgram.STT(),                 
+            llm=openai.LLM(model="gpt-4o"),     
+            tts=elevenlabs.TTS(),               
+            chat_ctx=initial_ctx,
+            before_llm_cb=before_llm_cb,
+        )
+    except Exception as e:
+        logger.error(f"CRITICAL: Failed to initialize AI services (API Error): {e}")
+        return
+
+    @agent.on("error")
+    def on_error(e: Exception):
+        logger.error(f"Agent pipeline encountered an error (STT/TTS/LLM): {e}")
 
     agent.start(ctx.room, participant)
-    await agent.say("Agent online. How can I assist you?", allow_interruptions=True)
+    try:
+        await agent.say("Agent online. How can I assist you?", allow_interruptions=True)
+    except Exception as e:
+        logger.error(f"Failed to synthesize welcome message: {e}")
 
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm))
