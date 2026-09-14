@@ -1,5 +1,8 @@
 # 🎙️ Zero-Latency Voice Builder Sprint (Track 1)
 
+🌐 **Live Demo:** [https://ychackathon.vercel.app](https://ychackathon.vercel.app)  
+*(Dashboard: https://vercel.com/nrvtech2808-7448s-projects/ychackathon)*
+
 This repository contains our submission for the **YC Fall 2026 x Moss Hackathon (Track 1)**. 
 
 We have built a mission-critical, real-time Voice AI Platform designed for field workers, dispatchers, and healthcare professionals. By replacing traditional high-latency vector databases with **Moss** and substituting standard websockets with **LiveKit WebRTC**, we have successfully created an intelligent, interruptible voice agent capable of operating with sub-500ms Turn-Around Time (TAT).
