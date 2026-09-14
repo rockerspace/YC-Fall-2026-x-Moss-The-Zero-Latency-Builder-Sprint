@@ -89,9 +89,9 @@ function AgentInterface({ onDisconnect }: { onDisconnect: () => void }) {
       <h3 className="text-xl font-semibold text-gray-200 mb-6 w-full text-left">Real-Time Interaction</h3>
       <div className="mb-8 flex w-full items-center space-x-3">
         <div className={`h-3 w-3 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] ${
-          state === 'connected' ? 'bg-green-500 shadow-green-500/50' : 
           state === 'speaking' ? 'bg-blue-500 shadow-blue-500/50 animate-pulse' :
-          state === 'listening' ? 'bg-purple-500 shadow-purple-500/50' :
+          state === 'listening' ? 'bg-green-500 shadow-green-500/50' :
+          state === 'thinking' ? 'bg-purple-500 shadow-purple-500/50 animate-pulse' :
           'bg-yellow-500 animate-pulse shadow-yellow-500/50'
         }`}></div>
         <span className="font-mono text-sm text-gray-300 uppercase tracking-widest">
