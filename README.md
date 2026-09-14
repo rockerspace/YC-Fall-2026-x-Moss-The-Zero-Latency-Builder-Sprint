@@ -71,6 +71,7 @@ The complete requirements, acceptance criteria, and architecture traceability ma
 
 ## 🌟 Key Features
 
+* **Multi-Industry Personas:** Dynamically toggle between Field Worker, Healthcare Triage, Emergency Dispatch, and Customer Support personas to demonstrate Moss's versatility.
 * **Ultra-Low Latency Transport:** Full-duplex audio streaming powered by LiveKit, avoiding HTTP/WebSocket bottlenecks.
 * **Sub-10ms Semantic Context:** Integrates the Moss engine to instantly inject real-time session state (like technical manuals or live logs) into the LLM before generation.
 * **Next.js Admin Dashboard:** A slick, real-time web portal that securely mints session tokens and allows admins to view connection metrics and AI explainability logs.
