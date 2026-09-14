@@ -75,11 +75,20 @@ async def entrypoint(ctx: JobContext):
                 query=last_user_msg.content
             )
             
-            # Inject the context dynamically as a system message right before the LLM sees it
+            # 1. Inject the context dynamically as a system message right before the LLM sees it
             chat_ctx.messages.append(llm.ChatMessage(
                 role="system",
                 content=f"MOSS CONTEXT (Inject Time: {time.time()}):\n{context}"
             ))
+
+            # 2. Publish Explainability Log to the Next.js Frontend (SEC-303)
+            import json
+            payload = json.dumps({
+                "type": "explainability_log",
+                "data": f"Query: '{last_user_msg.content}'\n{context}"
+            }).encode('utf-8')
+            
+            await ctx.room.local_participant.publish_data(payload)
 
     # 3. Assemble the ultra-low latency pipeline
     agent = VoicePipelineAgent(
