@@ -6,30 +6,75 @@ We have built a mission-critical, real-time Voice AI Platform designed for field
 
 ---
 
-## 🌟 Key Features
+## 🏗️ System Architecture
 
-* **Ultra-Low Latency Transport:** Full-duplex audio streaming powered by LiveKit WebRTC SFU, avoiding standard HTTP/WebSocket bottlenecks.
-* **Sub-10ms Semantic Context:** Integrates the Moss Context Engine to instantly inject real-time session state and knowledge (like technical manuals or live logs) into the LLM before generation.
-* **Barge-In / Interruptibility:** Utilizes Silero Voice Activity Detection (VAD) via the LiveKit Agents SDK to instantly halt the Text-to-Speech queue when the user interrupts the agent.
-* **Next.js Admin Dashboard:** A slick, real-time web portal that securely mints session tokens and allows admins to view connection metrics and AI explainability logs.
-* **AI Explainability (SEC-303):** The backend streams LiveKit Data Packets containing the exact Moss context traces used to generate the agent's response, rendering them on the frontend for traceability.
+Our streaming microservices architecture minimizes glass-to-glass latency by pipelining STT, context retrieval, and TTS concurrently over a WebRTC transport layer.
+
+*(See the original [Architecture PDF](./architecture-a3-1789308242480.pdf) for detailed specs).*
+
+```mermaid
+graph TD
+    subgraph Client Layer
+        UI[Next.js Admin Dashboard]
+        VC[WebRTC Voice Client]
+    end
+
+    subgraph Streaming Gateway
+        LK[LiveKit WebRTC SFU]
+    end
+
+    subgraph AI Processing Layer
+        VO[Python Voice Orchestrator\nLiveKit Agents SDK]
+        STT[Deepgram STT]
+        LLM[OpenAI GPT-4o / Claude 3.5]
+        TTS[ElevenLabs TTS]
+        VAD[Silero VAD - Barge-in]
+    end
+
+    subgraph Context Layer
+        MOSS[(Moss Context Engine\n<10ms Retrieval)]
+        RAG[(Vector DB / Knowledge Base)]
+    end
+
+    UI -->|Session Tokens| LK
+    VC <-->|Full-Duplex Audio| LK
+    LK <-->|Audio & Events| VO
+
+    VO -->|Audio chunk| STT
+    STT -->|Text| VO
+    VO -->|1. Inject Context| MOSS
+    MOSS -->|2. Sub-10ms Context| VO
+    VO -->|3. Prompt + Context| LLM
+    LLM -->|Text Stream| VO
+    VO -->|Text Stream| TTS
+    TTS -->|Synthesized Audio| VO
+    
+    VO -.->|VAD Interrupt| VAD
+    VO -.->|Explainability Logs SEC-303| UI
+```
 
 ---
 
-## 🏗️ Architecture Overview
+## 📋 Product Requirements (PRD) Summary
 
-The system is split into two main components:
+The complete requirements, acceptance criteria, and architecture traceability matrix can be found in the **[PRD_Track1.md](./PRD_Track1.md)** document.
 
-1. **`/frontend` (Next.js 15, TailwindCSS, LiveKit Components)**
-   * Securely generates JWT tokens via `/api/token`.
-   * Manages the WebRTC connection via `<LiveKitRoom>`.
-   * Displays agent status, audio visualizers, and real-time Moss explainability logs.
-2. **`/agent` (Python 3.12, LiveKit Agents SDK)**
-   * The "Voice Orchestrator". Connects to the room and listens to the user.
-   * **STT:** Deepgram (Nova-2) for lightning-fast transcription.
-   * **Context:** Moss SDK intercepts the pipeline via `before_llm_cb` to fetch semantic context in <10ms.
-   * **LLM:** OpenAI GPT-4o powers the conversational logic based on the CRISPE prompt framework.
-   * **TTS:** ElevenLabs generates ultra-realistic voice output.
+### Core Objectives
+* **Ultra-Low Latency (NFR-201):** Achieve total response latency (STT + LLM + TTS) under 500ms.
+* **Real-Time Voice (FR-101):** Full-duplex communication using LiveKit WebRTC SFU with <50ms transport latency.
+* **Instant Context (FR-102):** Integrate Moss to fetch semantic session state and technical protocols in <10ms.
+* **Interruptibility (FR-104):** Silero VAD instantly halts TTS playback when user speech is detected.
+* **AI Explainability (SEC-303):** Provide transparent real-time logs in the UI detailing exact Moss context traces used for generated responses.
+* **Data Erasure (SEC-302):** Automated lifecycle policies to purge voice recordings within 24 hours.
+
+---
+
+## 🌟 Key Features
+
+* **Ultra-Low Latency Transport:** Full-duplex audio streaming powered by LiveKit, avoiding HTTP/WebSocket bottlenecks.
+* **Sub-10ms Semantic Context:** Integrates the Moss engine to instantly inject real-time session state (like technical manuals or live logs) into the LLM before generation.
+* **Next.js Admin Dashboard:** A slick, real-time web portal that securely mints session tokens and allows admins to view connection metrics and AI explainability logs.
+* **CRISPE Prompt Engineering:** Context-aware prompts optimized for concise, TTS-friendly output.
 
 ---
 
@@ -48,7 +93,6 @@ pip install -r requirements.txt
 Copy the `.env.example` file to `.env` and add your API keys:
 ```bash
 cp .env.example .env
-# Edit .env to add LiveKit, Deepgram, OpenAI, and ElevenLabs keys
 ```
 
 Run the agent worker:
@@ -67,7 +111,6 @@ npm install
 Copy the `.env.local.example` to `.env.local`:
 ```bash
 cp .env.local.example .env.local
-# Edit .env.local to add your LiveKit Cloud Project URL, API Key, and API Secret
 ```
 
 Run the Next.js development server:
@@ -84,5 +127,3 @@ Open [http://localhost:3000](http://localhost:3000) in your browser and click **
 This repository is equipped with GitHub Actions located in `.github/workflows`:
 - **Frontend Build Check:** Ensures Next.js builds successfully on every pull request.
 - **Backend Python Check:** Verifies Python syntax and validates dependencies.
-
-See the [PRD_Track1.md](./PRD_Track1.md) file for a detailed look at the functional, non-functional, and security requirements guiding this architecture.
