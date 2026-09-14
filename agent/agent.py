@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import time
+import random
 
 from dotenv import load_dotenv
 from livekit.agents import AutoSubscribe, JobContext, JobProcess, WorkerOptions, cli, llm
@@ -11,8 +12,31 @@ from livekit.plugins import deepgram, elevenlabs, openai, silero
 load_dotenv()
 logger = logging.getLogger("voice-agent")
 
+# --- HACKATHON SCENARIOS ---
+# Showcasing the versatility of Moss for different industries!
+SCENARIOS = {
+    "field_worker": {
+        "role": "expert field operations assistant",
+        "context": "[ACTIVE SESSION: Assignment 42 - HVAC Repair]\nRecent logs: Compressor valve pressure dropped below threshold.\nProtocol: Inform user to wear safety goggles before inspecting the valve."
+    },
+    "healthcare": {
+        "role": "medical triage assistant",
+        "context": "[ACTIVE SESSION: Patient ER Intake]\nVitals: Heart rate 110bpm, Blood Pressure 140/90.\nProtocol: Ask patient about chest pain duration. Recommend immediate EKG."
+    },
+    "dispatch": {
+        "role": "emergency dispatch coordinator",
+        "context": "[ACTIVE SESSION: Incident 992 - Highway Collision]\nLocation: I-95 Northbound, Mile marker 42.\nProtocol: Dispatch 2 ambulances and 1 fire engine. Keep caller calm."
+    },
+    "customer_support": {
+        "role": "customer support specialist",
+        "context": "[ACTIVE SESSION: Billing Inquiry - Acct #7782]\nStatus: Overdue balance of $120.50.\nProtocol: Offer a 3-month payment plan. Do not charge late fees."
+    }
+}
+
+# Change this variable to test different industries for your demo!
+CURRENT_SCENARIO = "healthcare"
+
 # --- MOSS SDK STUB ---
-# In a real environment, this would import the Moss SDK and connect to the Moss cluster
 class MossContextEngine:
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -21,37 +45,25 @@ class MossContextEngine:
     async def retrieve_context(self, user_id: str, query: str) -> str:
         """Simulates <10ms retrieval of semantic context and user state."""
         start = time.perf_counter()
-        
-        # Simulate network/retrieval latency (e.g., 5-8ms)
-        await asyncio.sleep(0.005) 
-        
+        await asyncio.sleep(0.005) # Simulate 5ms retrieval
         latency = (time.perf_counter() - start) * 1000
         logger.info(f"[Moss] Retrieved semantic context in {latency:.2f}ms for query: '{query}'")
         
-        # Simulated context returned by Moss based on user state
-        return (
-            f"[ACTIVE SESSION: Assignment 42 - HVAC Repair]\n"
-            f"User ID: {user_id}\n"
-            f"Recent logs: Compressor valve pressure dropped below threshold.\n"
-            f"Protocol: Inform user to wear safety goggles before inspecting the valve.\n"
-        )
+        return f"User ID: {user_id}\n{SCENARIOS[CURRENT_SCENARIO]['context']}"
 
-# Initialize Moss Client
 moss_engine = MossContextEngine(api_key=os.getenv("MOSS_API_KEY", "hackathon-mock-key"))
 # ---------------------
 
 def prewarm(proc: JobProcess):
-    """Preloads the Silero VAD (Voice Activity Detection) model to eliminate cold-start latency."""
     proc.userdata["vad"] = silero.VAD.load()
 
 async def entrypoint(ctx: JobContext):
-    """Main entrypoint for the Voice Agent."""
-    
     # 1. Base CRISPE prompt incorporating constraints for low latency
+    scenario = SCENARIOS[CURRENT_SCENARIO]
     initial_ctx = llm.ChatContext().append(
         role="system",
         text=(
-            "You are an expert field operations and medical dispatch AI assistant operating in a real-time, voice-only environment. "
+            f"You are an {scenario['role']} operating in a real-time, voice-only environment. "
             "Answer the user's spoken inquiry immediately using the MOSS CONTEXT provided in the system messages. "
             "Be exceedingly concise, professional, and clear. Speak in short, digestible sentences suitable for text-to-speech. "
             "If the requested information is not in the context, clearly state that you do not have the information."
@@ -63,31 +75,22 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"Starting voice assistant for participant {participant.identity}")
 
     # 2. Define the Moss interception hook
-    # This runs right after the STT finishes transcribing, but before the LLM generates a response.
     async def before_llm_cb(agent: VoicePipelineAgent, chat_ctx: llm.ChatContext):
-        # Extract the user's latest transcribed speech
         last_user_msg = chat_ctx.messages[-1] if chat_ctx.messages else None
-        
         if last_user_msg and last_user_msg.role == "user" and isinstance(last_user_msg.content, str):
-            # Fetch real-time context from Moss in <10ms
             context = await moss_engine.retrieve_context(
                 user_id=participant.identity, 
                 query=last_user_msg.content
             )
-            
-            # 1. Inject the context dynamically as a system message right before the LLM sees it
             chat_ctx.messages.append(llm.ChatMessage(
                 role="system",
                 content=f"MOSS CONTEXT (Inject Time: {time.time()}):\n{context}"
             ))
-
-            # 2. Publish Explainability Log to the Next.js Frontend (SEC-303)
             import json
             payload = json.dumps({
                 "type": "explainability_log",
-                "data": f"Query: '{last_user_msg.content}'\n{context}"
+                "data": f"[{CURRENT_SCENARIO.upper()}]\nQuery: '{last_user_msg.content}'\n{context}"
             }).encode('utf-8')
-            
             await ctx.room.local_participant.publish_data(payload)
 
     # 3. Assemble the ultra-low latency pipeline
@@ -97,18 +100,11 @@ async def entrypoint(ctx: JobContext):
         llm=openai.LLM(model="gpt-4o"),     
         tts=elevenlabs.TTS(),               
         chat_ctx=initial_ctx,
-        before_llm_cb=before_llm_cb,        # <--- Attach the Moss context injector here
+        before_llm_cb=before_llm_cb,
     )
 
     agent.start(ctx.room, participant)
-
-    # 4. Greet the user to establish the connection immediately
-    await agent.say("Agent online. How can I assist you with your current task?", allow_interruptions=True)
+    await agent.say("Agent online. How can I assist you?", allow_interruptions=True)
 
 if __name__ == "__main__":
-    cli.run_app(
-        WorkerOptions(
-            entrypoint_fnc=entrypoint,
-            prewarm_fnc=prewarm,
-        )
-    )
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm))
