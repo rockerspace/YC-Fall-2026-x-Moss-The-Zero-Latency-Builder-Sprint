@@ -1,5 +1,12 @@
 # 🎙️ Zero-Latency Voice Builder Sprint (Track 1)
 
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![LiveKit](https://img.shields.io/badge/LiveKit-00B272?style=for-the-badge&logo=livekit&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Production_Ready-brightgreen?style=for-the-badge)
 🌐 **Live Demo:** [https://ychackathon.vercel.app](https://ychackathon.vercel.app)  
 *(Dashboard: https://vercel.com/nrvtech2808-7448s-projects/ychackathon)*
 
